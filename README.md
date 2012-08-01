@@ -21,7 +21,7 @@ build instructions
 
 
 ```
-nodejs build for raspberry pi with vfp2 supportexport GYP_DEFINES="armv7=0"
+export GYP_DEFINES="armv7=0"
 export CXXFLAGS='-march=armv6 -mfpu=vfp -mfloat-abi=hard -DUSE_EABI_HARDFLOAT'
 export CCFLAGS='-march=armv6 -mfpu=vfp -mfloat-abi=hard -DUSE_EABI_HARDFLOAT'
 ./configure --shared-openssl --without-snapshot
