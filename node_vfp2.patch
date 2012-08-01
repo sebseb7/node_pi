@@ -1,0 +1,158 @@
+diff -Nur node-v0.8.3-orig/deps/v8/SConstruct node-v0.8.3/deps/v8/SConstruct
+--- node-v0.8.3-orig/deps/v8/SConstruct	2012-07-19 17:01:56.000000000 +0000
++++ node-v0.8.3/deps/v8/SConstruct	2012-07-20 03:53:10.726806629 +0000
+@@ -80,8 +80,8 @@
+   },
+   'gcc': {
+     'all': {
+-      'CCFLAGS':      ['$DIALECTFLAGS', '$WARNINGFLAGS'],
+-      'CXXFLAGS':     ['-fno-rtti', '-fno-exceptions'],
++      'CCFLAGS':      ['$DIALECTFLAGS', '$WARNINGFLAGS', '-march=armv6'],
++      'CXXFLAGS':     ['-fno-rtti', '-fno-exceptions', '-march=armv6'],
+     },
+     'visibility:hidden': {
+       # Use visibility=default to disable this.
+@@ -160,7 +160,7 @@
+       'armeabi:softfp' : {
+         'CPPDEFINES' : ['USE_EABI_HARDFLOAT=0'],
+         'vfp3:on': {
+-          'CPPDEFINES' : ['CAN_USE_VFP_INSTRUCTIONS']
++          'CPPDEFINES' : ['CAN_USE_VFP2_INSTRUCTIONS']
+         },
+         'simulator:none': {
+           'CCFLAGS':     ['-mfloat-abi=softfp'],
+@@ -169,7 +169,7 @@
+       'armeabi:hard' : {
+         'CPPDEFINES' : ['USE_EABI_HARDFLOAT=1'],
+         'vfp3:on': {
+-          'CPPDEFINES' : ['CAN_USE_VFP_INSTRUCTIONS']
++          'CPPDEFINES' : ['CAN_USE_VFP2_INSTRUCTIONS']
+         },
+         'simulator:none': {
+           'CCFLAGS':     ['-mfloat-abi=hard'],
+diff -Nur node-v0.8.3-orig/deps/v8/src/arm/assembler-arm.cc node-v0.8.3/deps/v8/src/arm/assembler-arm.cc
+--- node-v0.8.3-orig/deps/v8/src/arm/assembler-arm.cc	2012-07-19 17:01:56.000000000 +0000
++++ node-v0.8.3/deps/v8/src/arm/assembler-arm.cc	2012-07-20 03:50:58.679635575 +0000
+@@ -60,9 +60,12 @@
+ #ifdef CAN_USE_ARMV7_INSTRUCTIONS
+   answer |= 1u << ARMv7;
+ #endif  // def CAN_USE_ARMV7_INSTRUCTIONS
+-#ifdef CAN_USE_VFP_INSTRUCTIONS
+-  answer |= 1u << VFP3 | 1u << ARMv7;
+-#endif  // def CAN_USE_VFP_INSTRUCTIONS
++#ifdef CAN_USE_VFP3_INSTRUCTIONS
++  answer |= 1u << VFP3 | 1u << VFP2 | 1u << ARMv7;
++#endif  // def CAN_USE_VFP3_INSTRUCTIONS
++#ifdef CAN_USE_VFP2_INSTRUCTIONS
++  answer |= 1u << VFP2;
++#endif // def CAN_USE_VFP2_INSTRUCTIONS
+ 
+ #ifdef __arm__
+   // If the compiler is allowed to use VFP then we can use VFP too in our code
+@@ -1742,7 +1745,7 @@
+   // Instruction details available in ARM DDI 0406A, A8-786.
+   // cond(31-28) | 1101(27-24)| U000(23-20) | | Rbase(19-16) |
+   // Vsrc(15-12) | 1011(11-8) | (offset/4)
+-  ASSERT(CpuFeatures::IsEnabled(VFP3));
++  ASSERT(CpuFeatures::IsEnabled(VFP3) || CpuFeatures::IsEnabled(VFP2));
+   int u = 1;
+   if (offset < 0) {
+     offset = -offset;
+@@ -2028,7 +2031,7 @@
+   // Instruction details available in ARM DDI 0406A, A8-646.
+   // cond(31-28) | 1100(27-24)| 010(23-21) | op=0(20) | Rt2(19-16) |
+   // Rt(15-12) | 1011(11-8) | 00(7-6) | M(5) | 1(4) | Vm
+-  ASSERT(CpuFeatures::IsEnabled(VFP3));
++  ASSERT(CpuFeatures::IsEnabled(VFP3) || CpuFeatures::IsEnabled(VFP2));
+   ASSERT(!src1.is(pc) && !src2.is(pc));
+   emit(cond | 0xC*B24 | B22 | src2.code()*B16 |
+        src1.code()*B12 | 0xB*B8 | B4 | dst.code());
+diff -Nur node-v0.8.3-orig/deps/v8/src/arm/code-stubs-arm.cc node-v0.8.3/deps/v8/src/arm/code-stubs-arm.cc
+--- node-v0.8.3-orig/deps/v8/src/arm/code-stubs-arm.cc	2012-07-19 17:01:56.000000000 +0000
++++ node-v0.8.3/deps/v8/src/arm/code-stubs-arm.cc	2012-07-20 03:47:27.195617764 +0000
+@@ -978,7 +978,7 @@
+   __ push(lr);
+   __ PrepareCallCFunction(0, 2, scratch);
+   if (masm->use_eabi_hardfloat()) {
+-    CpuFeatures::Scope scope(VFP3);
++    CpuFeatures::Scope scope(VFP2);
+     __ vmov(d0, r0, r1);
+     __ vmov(d1, r2, r3);
+   }
+@@ -990,7 +990,7 @@
+   // Store answer in the overwritable heap number. Double returned in
+   // registers r0 and r1 or in d0.
+   if (masm->use_eabi_hardfloat()) {
+-    CpuFeatures::Scope scope(VFP3);
++    CpuFeatures::Scope scope(VFP2);
+     __ vstr(d0,
+             FieldMemOperand(heap_number_result, HeapNumber::kValueOffset));
+   } else {
+@@ -1362,7 +1362,7 @@
+     __ push(lr);
+     __ PrepareCallCFunction(0, 2, r5);
+     if (masm->use_eabi_hardfloat()) {
+-      CpuFeatures::Scope scope(VFP3);
++      CpuFeatures::Scope scope(VFP2);
+       __ vmov(d0, r0, r1);
+       __ vmov(d1, r2, r3);
+     }
+@@ -3389,7 +3389,7 @@
+ 
+   __ push(lr);
+   __ PrepareCallCFunction(0, 1, scratch);
+-  if (masm->use_eabi_hardfloat()) {
++  if (masm->use_eabi_hardfloat() && CpuFeatures::IsSupported(VFP3)) {
+     __ vmov(d0, d2);
+   } else {
+     __ vmov(r0, r1, d2);
+diff -Nur node-v0.8.3-orig/deps/v8/src/arm/macro-assembler-arm.cc node-v0.8.3/deps/v8/src/arm/macro-assembler-arm.cc
+--- node-v0.8.3-orig/deps/v8/src/arm/macro-assembler-arm.cc	2012-07-19 17:01:56.000000000 +0000
++++ node-v0.8.3/deps/v8/src/arm/macro-assembler-arm.cc	2012-07-20 03:49:31.701781597 +0000
+@@ -930,7 +930,7 @@
+ }
+ 
+ void MacroAssembler::GetCFunctionDoubleResult(const DoubleRegister dst) {
+-  if (use_eabi_hardfloat()) {
++  if (use_eabi_hardfloat() && CpuFeatures::IsSupported(VFP3)) {
+     Move(dst, d0);
+   } else {
+     vmov(dst, r0, r1);
+@@ -3332,7 +3332,7 @@
+ 
+ 
+ void MacroAssembler::SetCallCDoubleArguments(DoubleRegister dreg) {
+-  if (use_eabi_hardfloat()) {
++  if (use_eabi_hardfloat() && CpuFeatures::IsSupported(VFP3)) {
+     Move(d0, dreg);
+   } else {
+     vmov(r0, r1, dreg);
+@@ -3342,7 +3342,7 @@
+ 
+ void MacroAssembler::SetCallCDoubleArguments(DoubleRegister dreg1,
+                                              DoubleRegister dreg2) {
+-  if (use_eabi_hardfloat()) {
++  if (use_eabi_hardfloat() && CpuFeatures::IsSupported(VFP3)) {
+     if (dreg2.is(d0)) {
+       ASSERT(!dreg1.is(d1));
+       Move(d1, dreg2);
+@@ -3360,7 +3360,7 @@
+ 
+ void MacroAssembler::SetCallCDoubleArguments(DoubleRegister dreg,
+                                              Register reg) {
+-  if (use_eabi_hardfloat()) {
++  if (use_eabi_hardfloat() && CpuFeatures::IsSupported(VFP3)) {
+     Move(d0, dreg);
+     Move(r0, reg);
+   } else {
+diff -Nur node-v0.8.3-orig/deps/v8/src/v8globals.h node-v0.8.3/deps/v8/src/v8globals.h
+--- node-v0.8.3-orig/deps/v8/src/v8globals.h	2012-07-19 17:01:56.000000000 +0000
++++ node-v0.8.3/deps/v8/src/v8globals.h	2012-07-20 03:50:22.030239517 +0000
+@@ -442,6 +442,7 @@
+                   CPUID = 10,  // x86
+                   VFP3 = 1,    // ARM
+                   ARMv7 = 2,   // ARM
++                  VFP2 = 4,    // ARM
+                   SAHF = 0,    // x86
+                   FPU = 1};    // MIPS
+ 
